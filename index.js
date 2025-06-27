@@ -40,6 +40,27 @@ app.get("/", (req, res) => {
   res.send("Parcel Delivery Server is Running");
 });
 
+// GET /parcels OR /parcels?email=user@example.com
+app.get("/parcels", async (req, res) => {
+  try {
+    const { email } = req.query;
+
+    const filter = email ? { created_by: email } : {};
+
+    const parcels = await parcelCollection
+      .find(filter)
+      .sort({ creation_date: -1 }) // latest first
+      .toArray();
+
+    res.send(parcels);
+  } catch (error) {
+    console.error("❌ Error fetching parcels:", error);
+    res
+      .status(500)
+      .send({ message: "Failed to fetch parcels", error: error.message });
+  }
+});
+
 // POST /parcels — Add a new parcel
 app.post("/parcels", async (req, res) => {
   try {
@@ -51,7 +72,9 @@ app.post("/parcels", async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Error adding parcel:", error);
-    res.status(500).send({ message: "Failed to add parcel", error: error.message });
+    res
+      .status(500)
+      .send({ message: "Failed to add parcel", error: error.message });
   }
 });
 
