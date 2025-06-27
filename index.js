@@ -1,7 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -75,6 +75,16 @@ app.post("/parcels", async (req, res) => {
     res
       .status(500)
       .send({ message: "Failed to add parcel", error: error.message });
+  }
+});
+// Delete Parcel
+app.delete("/parcels/:id", async (req, res) => {
+  const id  = req.params;
+  try {
+    const result = await parcelCollection.deleteOne({ _id: new ObjectId(id) });
+    res.send(result);
+  } catch (err) {
+    res.status(500).send({ message: "Delete failed", error: err.message });
   }
 });
 
