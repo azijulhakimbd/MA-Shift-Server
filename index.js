@@ -35,7 +35,7 @@ let usersCollection;
 let trackingCollection;
 async function run() {
   try {
-    // await client.connect();
+    await client.connect();
     const db = client.db("parcelDB");
     usersCollection = db.collection("users");
     parcelCollection = db.collection("parcels");
@@ -81,7 +81,7 @@ app.post("/users", async (req, res) => {
     // Update last_login field
     await usersCollection.updateOne(
       { email },
-      { $set: { last_login: new Date() } }
+      { $set: { last_login: new Date().toISOString() } }
     );
 
     return res.status(200).send({
