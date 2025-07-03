@@ -106,6 +106,52 @@ app.post("/users", async (req, res) => {
   res.send(result);
 });
 
+// Get user by Email
+app.get("/users/email/:email", async (req, res) => {
+  try {
+    const email = req.params.email;
+    const user = await usersCollection.findOne({ email });
+    if (!user) {
+      return res.status(404).send({ message: "User not found" });
+    }
+    res.send(user);
+  } catch (error) {
+    res
+      .status(500)
+      .send({ message: "Failed to fetch user", error: error.message });
+  }
+});
+// Make Admin
+app.patch("/users/admin/:email", async (req, res) => {
+  try {
+    const email = req.params.email;
+    const result = await usersCollection.updateOne(
+      { email },
+      { $set: { role: "admin" } }
+    );
+    res.send(result);
+  } catch (error) {
+    res
+      .status(500)
+      .send({ message: "Failed to make admin", error: error.message });
+  }
+});
+// Remove Admin
+app.patch("/users/remove-admin/:email", async (req, res) => {
+  try {
+    const email = req.params.email;
+    const result = await usersCollection.updateOne(
+      { email },
+      { $set: { role: "user" } }
+    );
+    res.send(result);
+  } catch (error) {
+    res
+      .status(500)
+      .send({ message: "Failed to remove admin", error: error.message });
+  }
+});
+
 // ------------------------ Parcel Section Code -------------------------------------
 
 // Get all parcels or by user email
