@@ -11,12 +11,10 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-
-
 const serviceAccount = require("./ma-shift-firebase-key.json");
 
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
+  credential: admin.credential.cert(serviceAccount),
 });
 
 // MongoDB setup
@@ -33,6 +31,7 @@ let parcelCollection;
 let paymentsCollection;
 let usersCollection;
 let trackingCollection;
+let riderCollection;
 async function run() {
   try {
     await client.connect();
@@ -40,7 +39,8 @@ async function run() {
     usersCollection = db.collection("users");
     parcelCollection = db.collection("parcels");
     paymentsCollection = db.collection("payments");
-    trackingCollection = db.collection("");
+    trackingCollection = db.collection("tracking");
+    riderCollection = db.collection("riders");
     await db.command({ ping: 1 });
     console.log("✅ Connected to MongoDB!");
   } catch (err) {
@@ -49,25 +49,24 @@ async function run() {
 }
 run().catch(console.dir);
 // Custom Middleware
-const verifyFbToken = async(req,res, next)=>{
-  const authHeader =req.headers.authorization;
-  if(!authHeader){
-    return res.status(401).send({message:'unauthorized access'})
+const verifyFbToken = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).send({ message: "unauthorized access" });
   }
-  const token = authHeader.split(' ')[1];
-  if(!token){
-    return res.status(401).send({message:'unauthorized access'})
+  const token = authHeader.split(" ")[1];
+  if (!token) {
+    return res.status(401).send({ message: "unauthorized access" });
   }
   // verify the Token
-  try{
-    const decoded= await admin.auth().verifyIdToken(token);
-    req.decoded=decoded;
-    next()
-  }catch(error){
-    return res.status(403).send({message:'forbidden access'})
+  try {
+    const decoded = await admin.auth().verifyIdToken(token);
+    req.decoded = decoded;
+    next();
+  } catch (error) {
+    return res.status(403).send({ message: "forbidden access" });
   }
-  
-}
+};
 // Root route
 app.get("/", (req, res) => {
   res.send("Parcel Delivery Server is Running");
@@ -101,9 +100,8 @@ app.post("/users", async (req, res) => {
   res.send(result);
 });
 
-
 // Get all parcels or by user email
-app.get("/parcels", async (req, res) => {
+app.get("/parcels", verifyFbToken, async (req, res) => {
   try {
     const { email } = req.query;
     const filter = email ? { created_by: email } : {};
@@ -159,6 +157,19 @@ app.delete("/parcels/:id", async (req, res) => {
     res.send(result);
   } catch (err) {
     res.status(500).send({ message: "Delete failed", error: err.message });
+  }
+});
+
+// riders
+app.post("/riders", async (req, res) => {
+  try {
+    const rider = req.body;
+    const result = await riderCollection.insertOne(rider);
+    res.send(result);
+  } catch (error) {
+    res
+      .status(500)
+      .send({ error: "Failed to add rider", details: error.message });
   }
 });
 
