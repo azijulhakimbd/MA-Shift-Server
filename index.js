@@ -48,7 +48,9 @@ async function run() {
   }
 }
 run().catch(console.dir);
+
 // Custom Middleware
+
 const verifyFbToken = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
@@ -67,10 +69,14 @@ const verifyFbToken = async (req, res, next) => {
     return res.status(403).send({ message: "forbidden access" });
   }
 };
+
 // Root route
 app.get("/", (req, res) => {
   res.send("Parcel Delivery Server is Running");
 });
+
+// ----------------------- User Section Code -----------------------------
+
 // user
 app.post("/users", async (req, res) => {
   const email = req.body.email;
@@ -99,6 +105,8 @@ app.post("/users", async (req, res) => {
   const result = await usersCollection.insertOne(user);
   res.send(result);
 });
+
+// ------------------------ Parcel Section Code -------------------------------------
 
 // Get all parcels or by user email
 app.get("/parcels", async (req, res) => {
@@ -160,6 +168,8 @@ app.delete("/parcels/:id", async (req, res) => {
   }
 });
 
+// ----------------------------- Rider Section Code -----------------------------------------
+
 // riders
 app.post("/riders", async (req, res) => {
   try {
@@ -177,7 +187,7 @@ app.get("/riders/pending", async (req, res) => {
   try {
     const pendingRiders = await ridersCollection
       .find({ status: "pending" })
-      .sort({ createdAt: -1 }) // Optional: if you have timestamps
+      .sort({ createdAt: -1 })
       .toArray();
 
     res.send(pendingRiders);
@@ -188,6 +198,81 @@ app.get("/riders/pending", async (req, res) => {
     });
   }
 });
+// Rider Application Approve
+app.patch("/riders/approve/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    // First update rider status
+    const riderResult = await ridersCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { status: "approved" } }
+    );
+
+    // Get the rider info to update user's role
+    const rider = await ridersCollection.findOne({ _id: new ObjectId(id) });
+
+    if (rider?.email) {
+      // Update user's role to "rider"
+      await usersCollection.updateOne(
+        { email: rider.email },
+        { $set: { role: "rider" } }
+      );
+    }
+
+    res.send({
+      success: true,
+      message: "Rider approved & role updated",
+      riderResult,
+    });
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to approve rider or update role",
+      error: error.message,
+    });
+  }
+});
+// Cancel Rider Application
+app.delete("/riders/cancel/:id", async (req, res) => {
+  const id = req.params.id;
+  const result = await ridersCollection.deleteOne({ _id: new ObjectId(id) });
+  res.send(result);
+});
+// Active Riders (status: approved)
+app.get("/riders/active", async (req, res) => {
+  try {
+    const approvedRiders = await ridersCollection
+      .find({ status: "approved" })
+      .sort({ created_at: -1 }) // Optional: newest first
+      .toArray();
+
+    res.send(approvedRiders);
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to fetch approved riders",
+      error: error.message,
+    });
+  }
+});
+// Deactivate an approved rider
+app.patch("/riders/deactivate/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const result = await ridersCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { status: "inactive" } }
+    );
+
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to deactivate rider",
+      error: error.message,
+    });
+  }
+});
+
+// --------------------------- Tracking Section -----------------------------
 
 app.post("/tracking", async (req, res) => {
   const { trackingId, parcelId, status, location } = req.body;
@@ -210,6 +295,8 @@ app.post("/tracking", async (req, res) => {
   res.send({ success: true, insertedId: result.insertedId });
 });
 
+// ---------------------- Stripe Code -----------------------------------
+
 // Stripe Payment Intent
 app.post("/create-payment-intent", async (req, res) => {
   const amountInCents = req.body.amountInCents;
@@ -224,6 +311,8 @@ app.post("/create-payment-intent", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// -------------------------- Payment Section Code --------------------------------
 
 // Get payment history (by user)
 app.get("/payments", verifyFbToken, async (req, res) => {
