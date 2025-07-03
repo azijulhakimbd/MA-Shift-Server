@@ -31,17 +31,17 @@ let parcelCollection;
 let paymentsCollection;
 let usersCollection;
 let trackingCollection;
-let riderCollection;
+let ridersCollection;
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
     const db = client.db("parcelDB");
     usersCollection = db.collection("users");
     parcelCollection = db.collection("parcels");
     paymentsCollection = db.collection("payments");
     trackingCollection = db.collection("tracking");
-    riderCollection = db.collection("riders");
-    await db.command({ ping: 1 });
+    ridersCollection = db.collection("riders");
+    // await db.command({ ping: 1 });
     console.log("✅ Connected to MongoDB!");
   } catch (err) {
     console.error("❌ MongoDB connection error:", err);
@@ -101,7 +101,7 @@ app.post("/users", async (req, res) => {
 });
 
 // Get all parcels or by user email
-app.get("/parcels", verifyFbToken, async (req, res) => {
+app.get("/parcels", async (req, res) => {
   try {
     const { email } = req.query;
     const filter = email ? { created_by: email } : {};
@@ -164,12 +164,28 @@ app.delete("/parcels/:id", async (req, res) => {
 app.post("/riders", async (req, res) => {
   try {
     const rider = req.body;
-    const result = await riderCollection.insertOne(rider);
+    const result = await ridersCollection.insertOne(rider);
     res.send(result);
   } catch (error) {
     res
       .status(500)
       .send({ error: "Failed to add rider", details: error.message });
+  }
+});
+//  Pending Riders
+app.get("/riders/pending", async (req, res) => {
+  try {
+    const pendingRiders = await ridersCollection
+      .find({ status: "pending" })
+      .sort({ createdAt: -1 }) // Optional: if you have timestamps
+      .toArray();
+
+    res.send(pendingRiders);
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to fetch pending riders",
+      error: error.message,
+    });
   }
 });
 
@@ -210,14 +226,21 @@ app.post("/create-payment-intent", async (req, res) => {
 });
 
 // Get payment history (by user)
-app.get("/payments", async (req, res) => {
+app.get("/payments", verifyFbToken, async (req, res) => {
   try {
     const email = req.query.email;
+
+    // Check if the decoded email matches the query email
+    if (req.decoded.email !== email) {
+      return res.status(403).send({ message: "Forbidden access" });
+    }
+
     const filter = email ? { email } : {};
     const payments = await paymentsCollection
       .find(filter)
       .sort({ paid_at: -1 })
       .toArray();
+
     res.send(payments);
   } catch (err) {
     res
