@@ -69,6 +69,33 @@ const verifyFbToken = async (req, res, next) => {
     return res.status(403).send({ message: "forbidden access" });
   }
 };
+const verifyAdmin = async (req, res, next) => {
+  const userEmail = req.decoded?.email;
+
+  if (!userEmail) {
+    return res
+      .status(401)
+      .send({ message: "Unauthorized: No email found in token." });
+  }
+
+  try {
+    const user = await usersCollection.findOne({ email: userEmail });
+
+    if (!user) {
+      return res.status(404).send({ message: "User not found." });
+    }
+
+    if (user.role !== "admin") {
+      return res.status(403).send({ message: "Forbidden: Admins only." });
+    }
+
+    next(); 
+  } catch (error) {
+    res
+      .status(500)
+      .send({ message: "Failed to verify admin", error: error.message });
+  }
+};
 
 // Root route
 app.get("/", (req, res) => {
@@ -105,24 +132,75 @@ app.post("/users", async (req, res) => {
   const result = await usersCollection.insertOne(user);
   res.send(result);
 });
-
-// Get user by Email
-app.get("/users/email/:email", async (req, res) => {
+// Role based
+app.get("/users/email/:email/role",verifyFbToken,verifyAdmin, async (req, res) => {
   try {
     const email = req.params.email;
+
+    if (!email) {
+      return res.status(400).send({ message: "Email is required" });
+    }
+
     const user = await usersCollection.findOne({ email });
+
     if (!user) {
       return res.status(404).send({ message: "User not found" });
     }
-    res.send(user);
+
+    res.send({ role: user.role || "user" });
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to fetch user role",
+      error: error.message,
+    });
+  }
+});
+// Partial + Case-Insensitive Match
+app.get("/users/email/:keyword",verifyFbToken,verifyAdmin, async (req, res) => {
+  try {
+    const keyword = req.params.keyword;
+    const regex = new RegExp(keyword, "i"); // i = case-insensitive
+    const users = await usersCollection
+      .find({ email: { $regex: regex } })
+      .toArray();
+
+    if (!users.length) {
+      return res.status(404).send({ message: "No matching users found" });
+    }
+
+    res.send(users);
   } catch (error) {
     res
       .status(500)
-      .send({ message: "Failed to fetch user", error: error.message });
+      .send({ message: "Failed to fetch users", error: error.message });
   }
 });
+// Get users by role (admin, rider, user)
+app.get("/users/email/:role",verifyFbToken,verifyAdmin, async (req, res) => {
+  try {
+    const { role } = req.params;
+    const validRoles = ["admin", "rider", "user"];
+
+    if (!validRoles.includes(role.toLowerCase())) {
+      return res.status(400).send({ message: "Invalid role type." });
+    }
+
+    const users = await usersCollection
+      .find({ role: role.toLowerCase() })
+      .sort({ created_at: -1 }) // Optional: newest first
+      .toArray();
+
+    res.send(users);
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to fetch users by role",
+      error: error.message,
+    });
+  }
+});
+
 // Make Admin
-app.patch("/users/admin/:email", async (req, res) => {
+app.patch("/users/admin/:email",verifyFbToken,verifyAdmin, async (req, res) => {
   try {
     const email = req.params.email;
     const result = await usersCollection.updateOne(
@@ -137,7 +215,7 @@ app.patch("/users/admin/:email", async (req, res) => {
   }
 });
 // Remove Admin
-app.patch("/users/remove-admin/:email", async (req, res) => {
+app.patch("/users/remove-admin/:email",verifyFbToken,verifyAdmin, async (req, res) => {
   try {
     const email = req.params.email;
     const result = await usersCollection.updateOne(
@@ -229,7 +307,7 @@ app.post("/riders", async (req, res) => {
   }
 });
 //  Pending Riders
-app.get("/riders/pending", async (req, res) => {
+app.get("/riders/pending",verifyFbToken,verifyAdmin, async (req, res) => {
   try {
     const pendingRiders = await ridersCollection
       .find({ status: "pending" })
@@ -245,7 +323,7 @@ app.get("/riders/pending", async (req, res) => {
   }
 });
 // Rider Application Approve
-app.patch("/riders/approve/:id", async (req, res) => {
+app.patch("/riders/approve/:id",verifyFbToken,verifyAdmin, async (req, res) => {
   try {
     const id = req.params.id;
 
@@ -279,13 +357,13 @@ app.patch("/riders/approve/:id", async (req, res) => {
   }
 });
 // Cancel Rider Application
-app.delete("/riders/cancel/:id", async (req, res) => {
+app.delete("/riders/cancel/:id",verifyFbToken,verifyAdmin, async (req, res) => {
   const id = req.params.id;
   const result = await ridersCollection.deleteOne({ _id: new ObjectId(id) });
   res.send(result);
 });
 // Active Riders (status: approved)
-app.get("/riders/active", async (req, res) => {
+app.get("/riders/active",verifyFbToken,verifyAdmin, async (req, res) => {
   try {
     const approvedRiders = await ridersCollection
       .find({ status: "approved" })
@@ -301,7 +379,7 @@ app.get("/riders/active", async (req, res) => {
   }
 });
 // Deactivate an approved rider
-app.patch("/riders/deactivate/:id", async (req, res) => {
+app.patch("/riders/deactivate/:id",verifyFbToken,verifyAdmin, async (req, res) => {
   try {
     const id = req.params.id;
     const result = await ridersCollection.updateOne(
